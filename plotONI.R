@@ -76,13 +76,18 @@ ONI.values %>%
 
 # 2000s bycatch years and survey years
 ONI.values %>% 
-  filter(Year %in% c(2001, 2006, 2011, 2015)) %>% 
+  filter(Year %in% c(2001, 2006)) %>% 
   filter(Month == 12) -> ONI.values.label.2
 
 # Immediately before and after bycatch years in 2000s
 ONI.values %>% 
   filter(Year %in% c(2000, 2002, 2005, 2007)) %>% 
   filter(Month == 12) -> ONI.values.label.2a
+
+# survey years
+ONI.values %>% 
+  filter(Year %in% c(2011, 2015)) %>% 
+  filter(Month == 12) -> ONI.values.label.3
 
 # 1980-1999
 ONI.values %>% 
@@ -148,6 +153,10 @@ p1.2 <- ggplot(data = ONI.values.2000.2022,
   geom_text(data = ONI.values.label.2a,
             aes(x = Month, y = ONI, label = Year),
             color = "orange",
+            size = 6, fontface = "bold") +
+  geom_text(data = ONI.values.label.3,
+            aes(x = Month, y = ONI, label = Year),
+            color = "red",
             size = 6, fontface = "bold") +
   ylab("ONI") +
   xlab("Month") +
@@ -290,23 +299,33 @@ p.all <- ggplot(data = ONI.values.all) +
 
 if (save.fig){
   dpi <- 600
-  ggsave(plot = p1,
+  ggsave(plot = p1.1,
          dpi = dpi,
          device = "png",
-         filename = paste0('figures/ONI2010_month_', Sys.Date(), '.png'),
+         filename = paste0('figures/ONI1980_20yr_month_', Sys.Date(), '.png'),
          width = 7.2, height = 4.32)
+  ggsave(plot = p1.2,
+         dpi = dpi,
+         device = "png",
+         filename = paste0('figures/ONI2000_23yr_month_', Sys.Date(), '.png'),
+         width = 7.2, height = 4.32)
+  
   ggsave(plot = p2,
          dpi = dpi, device = "png",
-         file = paste0('figures/ONI1990_', dpi, "dpi_", Sys.Date(), '.png'))
+         file = paste0('figures/ONI1990_', dpi, "dpi_", Sys.Date(), '.png'),
+         width = 7.2, height = 4.32)
   ggsave(plot = p.all,
          dpi = dpi, device = "png",
-         file = paste0('figures/ONIall_', dpi, "dpi_", Sys.Date(), '.png'))
+         file = paste0('figures/ONIall_', dpi, "dpi_", Sys.Date(), '.png'),
+         width = 7.2, height = 4.32)
   ggsave(plot = p4,
          dpi = dpi, device = "png",
-         file = paste0('figures/ONI1980_', dpi, "dpi_", Sys.Date(), '.png'))
+         file = paste0('figures/ONI1980_', dpi, "dpi_", Sys.Date(), '.png'),
+         width = 7.2, height = 4.32)
   ggsave(plot = p5,
          dpi = dpi, device = "png",
-         file = paste0('figures/ONI2005_', dpi, "dpi_", Sys.Date(), '.png'))
+         file = paste0('figures/ONI2005_', dpi, "dpi_", Sys.Date(), '.png'),
+         width = 7.2, height = 4.32)
   # ggsave(plot = p1.2005,
   #        dpi = 1200,
   #        file = paste0('Figures/ONI2005_month_', Sys.Date(), '.png'),
@@ -314,7 +333,8 @@ if (save.fig){
 
   ggsave(plot = p.1991to2007,
          dpi = dpi, device = "png",
-         file = paste0('figures/ONI1991to2007_', dpi, "dpi_", Sys.Date(), '.png'),
+         file = paste0('figures/ONI1991to2007_', dpi, 
+                       "dpi_", Sys.Date(), '.png'),
          height = 3.7, width = 5.9)
 
 }
