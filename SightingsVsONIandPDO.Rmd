@@ -1,0 +1,223 @@
+---
+title: "Sightings vs Ocean Indices"
+output: html_notebook
+---
+
+This file explains how relationships between sightings and ocean indices (ONI and PDO) were looked at for the loggerhead paper. First bring in the sightings data - including DGN observer data then merge them.  
+
+```{r}
+# clean the slate and load some functions:
+
+rm(list=ls())
+
+source('Cc_SCB_functions.R')
+
+#YMD2Y is in TomosFunctions.R
+# these include unidentified turtles - probably need to remove them.
+Cc_HotlineSightings <- read_rds('~/R/SCB_AerialSurvey/RDSfiles/SSTatHotlineSightings.rds') %>%
+ filter(., Species == 'Caretta' | Species == 'Unid') %>%
+  mutate(., source = "Sightings") %>%
+  mutate(Sp = "Cc") %>%
+  mutate(., Year = YMD2Y(Date)) %>%
+  select(., Date, beginLat, beginLon, Year) %>%
+  dplyr::rename(., Y = beginLat, X = beginLon)
+
+# these include only from MM survey sightings:
+Cc_CruiseSightings <- read.csv(file = '~/R/SCB_AerialSurvey/Data/CruiseSightings_Cc.csv') %>%
+  dplyr::rename(., date = Date_Observed) %>%
+  mutate(., Year = YMD2Y(date)) %>%
+  select(., date, Latitude, Longitude, Year)
+
+names(Cc_CruiseSightings) <- c('Date', 'Y', 'X', 'Year')
+
+# DGN bycatch data:
+DGN_bycatch <- read.csv('~/R/SCB_AerialSurvey/Data/CC_bycatch_DGN.csv') %>%
+  filter(!is.na(LatDD1)) %>%
+  mutate(Date = as.Date(paste(Year, MM, DD, sep = '-'), format = "%Y-%m-%d")) %>%
+  mutate(Y = LatDD1, X = -1 * LonDD1) %>%
+  select(Date, Y, X, Year)
+
+DGN_bycatch <- DGN_bycatch[!is.na(DGN_bycatch$Y),]
+
+# create a combined data frame
+all.sightings <- rbind(Cc_HotlineSightings, Cc_CruiseSightings, DGN_bycatch) %>%
+  mutate(Month = YMD2m(Date))
+
+# count the number of sightings per month:
+all.sightings %>% group_by(Year, Month) %>% summarise(n_Cc = n()) -> all.sightings.Y.m
+
+
+```
+
+Now bring in the ocean index data. These will be combined with the sightings data above.
+
+```{r}
+# Get ONI data:
+ONI.values <- read.csv('~/R/SCB_AerialSurvey/Data/ONI_20180319_nosource.csv')
+#ONI.values <- reshape::melt(ONI.dat.raw, id.vars = 'Year', value.name = 'ONI')
+
+colnames(ONI.values) <- c('Year', 'Month', 'Total', 'ClimAdj', 'ONI')
+
+ONI.values %>% mutate(time = Year + Month/12 - 1/12) %>%
+  mutate(time.end = time + 1/12) %>%
+  mutate(Nino = ifelse(ONI.values$ONI > 0, 'TRUE', 'FALSE')) %>%
+  mutate(cumuONI = cumsum(ONI)) %>%
+  mutate(cumu6moONI = c(rep(NA, 5), moving.cumsum(ONI, 6))) %>%
+  mutate(cumu4moONI = c(rep(NA, 3), moving.cumsum(ONI, 4))) %>%
+  mutate(cumu2moONI = c(rep(NA, 1), moving.cumsum(ONI, 2))) %>%
+  mutate(lag6moONI = c(rep(NA, 6), ONI[1:(nrow(ONI.values) - 6)])) %>%
+  mutate(cumulag6moONI = c(rep(NA, 5), moving.cumsum(lag6moONI, 6))) %>%
+  filter(Year <= max(all.sightings$Year)+1 & Year >= min(all.sightings$Year)) -> ONI.values
+
+# Get PDO data:
+dat.PDO <- read.delim('~/R/SCB_AerialSurvey/Data/PDO_20171128.txt',
+                      sep = "", header = T)
+PDO.values <- melt(dat.PDO, id.vars = 'YEAR')
+colnames(PDO.values) <- c('Year', 'MMM', 'PDO')
+
+dt <- seq(from = 0, to = 1.0 - 1/12, by = 1/12)
+uniq.period <- c('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+                 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC')
+num.month <- 1:12
+
+PDO.values$dt <- NA
+PDO.values$Month <- NA
+for (k in 1:length(uniq.period)){
+  PDO.values[PDO.values$MMM == uniq.period[k], 'dt'] <- dt[k]
+  PDO.values[PDO.values$MMM == uniq.period[k], 'Month'] <- num.month[k]
+}
+
+PDO.values$time <- PDO.values$Year + PDO.values$dt
+PDO.values$Pos <- ifelse(PDO.values$PDO > 0, 'TRUE', 'FALSE')
+PDO.values %>% mutate(cumuPDO = cumsum(PDO)) %>%
+  mutate(cumu6moPDO = c(rep(NA, 5), moving.cumsum(PDO, 6))) %>%
+  mutate(cumu4moPDO = c(rep(NA, 3), moving.cumsum(PDO, 4))) %>%
+  mutate(cumu2moPDO = c(rep(NA, 1), moving.cumsum(PDO, 2))) %>%
+  mutate(lag6moPDO = c(rep(NA, 6), PDO[1:(nrow(PDO.values) - 6)])) %>%
+  mutate(cumulag6moPDO = c(rep(NA, 5), moving.cumsum(lag6moPDO, 6))) %>%
+  filter(Year <= max(all.sightings$Year)+1 & Year >= min(all.sightings$Year)) -> PDO.values
+```
+
+Finally, combine the sightings and indices together. 
+
+```{r}
+all.sightings.Y.m %>%
+  right_join(., ONI.values, by = c("Year", "Month")) %>%
+  right_join(., PDO.values, by = c("Year", "Month")) -> all.sightings.ONI.PDO
+
+all.sightings.ONI.PDO$n_Cc[is.na(all.sightings.ONI.PDO$n_Cc)] <- 0
+all.sightings.ONI.PDO <- na.omit(all.sightings.ONI.PDO)
+
+# as tempting as they are, because of the difference in effort throughtout the area, 
+# we should probably convert them into 0-1, rather than treating them as real counts:
+
+all.sightings.ONI.PDO %>% mutate(presence = ifelse(n_Cc >0, 1, 0)) -> all.sightings.ONI.PDO
+
+```
+
+Plot some combinations to see if we can find good indices;
+
+```{r}
+p.ONI <- ggplot(data = all.sightings.ONI.PDO) + 
+  geom_point(aes(x = ONI, y = presence))
+
+p.PDO <- ggplot(data = all.sightings.ONI.PDO) + 
+  geom_point(aes(x = PDO, y = presence))
+
+p.cumu2moPDO <- ggplot(data = all.sightings.ONI.PDO) + 
+  geom_point(aes(x = cumu2moPDO, y = presence))
+
+p.cumu2moONI <- ggplot(data = all.sightings.ONI.PDO) + 
+  geom_point(aes(x = cumu2moONI, y = presence))
+
+p.PDO
+p.ONI
+p.cumu2moPDO
+p.cumu2moONI
+```
+
+They all look kinda informative. So, let's run logistic models to see if we can do some formal stats on it.
+
+```{r}
+library(mgcv)
+# GAM model with all variables
+fit.gam <- gam(presence ~ s(ONI) + s(cumu6moONI) + s(lag6moONI) + s(cumulag6moONI) + s(PDO) + s(cumu6moPDO) + s(lag6moPDO) + s(cumulag6moPDO), 
+               family = binomial,
+               data = all.sightings.ONI.PDO)
+
+summary(fit.gam)
+plot(fit.gam)
+```
+
+Estimated edfs are mostly 1s, so GLM should do the trick. 
+
+```{r}
+model.1 <- formula(presence ~ ONI + cumu6moONI + lag6moONI + cumulag6moONI - 1)
+
+fit.glm.1 <- glm(formula = model.1, family = binomial,
+                 data = all.sightings.ONI.PDO)
+summary(fit.glm.1)
+```
+
+Update the model with removing some variables that seem to be useless:
+
+```{r}
+model.2 <- formula(presence ~ ONI + cumu6moONI + lag6moONI + cumulag6moONI - 1)
+
+model.3 <- formula(presence ~ ONI + cumu6moONI + lag6moONI - 1)
+
+model.4 <- formula(presence ~ ONI + cumu6moONI - 1)
+
+model.5 <- formula(presence ~ ONI - 1)
+
+fit.glm.2 <- glm(formula = model.2, family = binomial,
+                 data = all.sightings.ONI.PDO)
+
+fit.glm.3 <- glm(formula = model.3, family = binomial,
+                 data = all.sightings.ONI.PDO)
+fit.glm.4 <- glm(formula = model.4, family = binomial,
+                 data = all.sightings.ONI.PDO)
+fit.glm.5 <- glm(formula = model.5, family = binomial,
+                 data = all.sightings.ONI.PDO)
+
+
+AIC(fit.glm.1, fit.glm.2, fit.glm.3, fit.glm.4, fit.glm.5)
+summary(fit.glm.3)
+
+```
+
+Interesting, isn't it? However... these zeros are not actually absence, as they may be unobserved presence. I don't think there is a way to conduct zero-inflated logistic analysis... or is there? This may be dealt with presence-only models? 
+
+Let's take a look at just DGN bycatch data, whose relationship with ONI has been discussed in the paper.
+
+```{r}
+DGN_bycatch %>%
+  mutate(Month = YMD2m(Date))%>%
+  mutate(presence = 1) %>%
+  right_join(., ONI.values, by = c("Year", "Month")) %>%
+  right_join(., PDO.values, by = c("Year", "Month")) %>%
+  filter(!(Year == 2014 & (Month == 6 | Month == 7 | Month == 8))) %>%
+  filter(!(Year == 2015 & (Month == 6 | Month == 7 | Month == 8))) %>%
+  filter(!(Year == 2016 & (Month == 6 | Month == 7 | Month == 8))) -> DGN.bycatch.ONI.PDO
+
+DGN.bycatch.ONI.PDO[is.na(DGN.bycatch.ONI.PDO$presence), 'presence'] <- 0
+# then run a logistic regression:
+DGN.glm.1 <- glm(formula = model.1, family = binomial,
+                 data = DGN.bycatch.ONI.PDO)
+
+DGN.glm.2 <- glm(formula = model.2, family = binomial,
+                 data = DGN.bycatch.ONI.PDO)
+DGN.glm.3 <- glm(formula = model.3, family = binomial,
+                 data = DGN.bycatch.ONI.PDO)
+DGN.glm.4 <- glm(formula = model.4, family = binomial,
+                 data = DGN.bycatch.ONI.PDO)
+DGN.glm.5 <- glm(formula = model.5, family = binomial,
+                 data = DGN.bycatch.ONI.PDO)
+
+AIC(DGN.glm.1, DGN.glm.2, DGN.glm.3, DGN.glm.4, DGN.glm.5)
+summary(DGN.glm.5)
+
+```
+
+Seems like  ONI isn't really useful either. This probably comes from the fact that these data are zero-inflated... We need to have effort data to properly analyze these bycatch data. I'm not sure if we want to go that far on these for this manuscript. 
+
