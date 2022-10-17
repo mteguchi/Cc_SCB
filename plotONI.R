@@ -18,7 +18,7 @@ moving.cumsum <- function(x, n = 2){
   return(y)
 }
 
-save.fig <- F
+save.fig <- T
 # Get ONI Oceanic Nino Index data:
 # https://origin.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_change.shtml
 # look at the link at the bottom to see the most up to date data in a flat ascii file.
@@ -83,6 +83,10 @@ ONI.values %>%
 ONI.values %>% 
   filter(Year %in% c(2000, 2002, 2005, 2007)) %>% 
   filter(Month == 12) -> ONI.values.label.2a
+
+ONI.values.2010 %>% 
+  filter(Year != 2011, Year != 2015) %>% 
+  filter(Month == 12) -> ONI.values.label.3a
 
 # survey years
 ONI.values %>% 
@@ -154,6 +158,44 @@ p1.2 <- ggplot(data = ONI.values.2000.2022,
             aes(x = Month, y = ONI, label = Year),
             color = "orange",
             size = 6, fontface = "bold") +
+  geom_text(data = ONI.values.label.3,
+            aes(x = Month, y = ONI, label = Year),
+            color = "red",
+            size = 6, fontface = "bold") +
+  ylab("ONI") +
+  xlab("Month") +
+  #ggtitle("ONI") +
+  theme(plot.title = element_text(hjust = 0.5),
+        #legend.title = element_text(size = 10, hjust = 0.5),
+        #legend.text = element_text(size = 8, vjust = 0),
+        legend.position = "none",
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12))
+
+
+p1.3 <- ggplot(data = ONI.values.2010,
+               aes(x = Month,
+                   y = ONI,
+                   color = fYear,
+                   group = fYear,
+                   label = fYear)) +
+  scale_color_viridis(discrete = TRUE, 
+                      name = "Year") +
+  geom_point(size = 2) + 
+  geom_line(size = 1.5) +
+  annotate('rect', xmin = 9, xmax = 11,
+           ymin = -Inf, ymax = Inf, 
+           alpha = 0.3) +
+  scale_x_continuous(breaks = 1:12) +
+  geom_text(data = ONI.values.label.3a,
+            aes(x = Month, y = ONI, label = Year),
+            color = "black",
+            size = 6, fontface = "bold") +
+
+  # geom_text(data = ONI.values.label.2a,
+  #           aes(x = Month, y = ONI, label = Year),
+  #           color = "orange",
+  #           size = 6, fontface = "bold") +
   geom_text(data = ONI.values.label.3,
             aes(x = Month, y = ONI, label = Year),
             color = "red",
@@ -310,6 +352,12 @@ if (save.fig){
          filename = paste0('figures/ONI2000_23yr_month_', Sys.Date(), '.png'),
          width = 7.2, height = 4.32)
   
+  ggsave(plot = p1.3,
+         dpi = dpi,
+         device = "png",
+         filename = paste0('figures/ONI2010_13yr_month_', Sys.Date(), '.png'),
+         width = 7.2, height = 4.32)
+
   ggsave(plot = p2,
          dpi = dpi, device = "png",
          file = paste0('figures/ONI1990_', dpi, "dpi_", Sys.Date(), '.png'),
